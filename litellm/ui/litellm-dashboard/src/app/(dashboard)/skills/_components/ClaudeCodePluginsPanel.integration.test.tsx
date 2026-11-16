@@ -27,6 +27,7 @@ const published: SkillHubSkill = {
   content_url: "/skill-hub/skills/shared-skill/content",
   updated_at: "2026-10-20T00:00:00Z",
   download_count: 0,
+  security_scan_passed: false,
 };
 
 const pending: SkillSubmission = {
@@ -306,20 +307,24 @@ it("paginates the neutral catalog and refreshes detail for a recreated skill", a
   await waitFor(() => expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled());
 });
 
-it.each(["descriptor", "archive"])("requires a portable %s for a submitted ZIP preview", async (missing) => {
-  submissions = [
-    {
-      ...pending,
-      has_archive: missing !== "archive",
-      proposal: { ...pending.proposal, agent_skill: missing === "descriptor" ? null : pending.proposal.agent_skill },
-    },
-  ];
-  renderSubmissions();
-  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-  expect(await screen.findByText("Currently published")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Download submitted ZIP" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Approve and publish" })).toBeEnabled();
-});
+it.each([false, true])(
+  "offers a legacy submitted ZIP preview only when an archive is stored: %s",
+  async (has_archive) => {
+    submissions = [
+      {
+        ...pending,
+        has_archive,
+        proposal: { ...pending.proposal, agent_skill: null },
+      },
+    ];
+    renderSubmissions();
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+    expect(await screen.findByText("Currently published")).toBeInTheDocument();
+    if (has_archive) expect(screen.getByRole("button", { name: "Download submitted ZIP" })).toBeEnabled();
+    else expect(screen.queryByRole("button", { name: "Download submitted ZIP" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve and publish" })).toBeEnabled();
+  },
+);
 
 it("paginates more than 20 submissions without showing the prior page while the next request loads or fails", async () => {
   submissions = makeSubmissions(21);
@@ -437,6 +442,93 @@ it("allows a member submission, explains approval and refreshes their pending li
   expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
 });
 
+it("registers a pinned archive reference through the neutral endpoint for member approval", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<ClaudeCodePluginsPanel accessToken="member-token" userRole="Internal User" />);
+  fireEvent.click(screen.getByRole("button", { name: "+ Register your skill" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Register source" }));
+  fireEvent.change(screen.getByLabelText("Source URL"), {
+    target: { value: "https://artifacts.example.test/review.zip" },
+  });
+  fireEvent.change(screen.getByLabelText("Registry name"), { target: { value: "review-alias" } });
+  fireEvent.click(screen.getByText("Advanced metadata (optional)"));
+  fireEvent.change(screen.getByLabelText("Archive SHA-256 (Optional)"), { target: { value: "aBcD".repeat(16) } });
+  await chooseSelectOption(
+    user,
+    screen.getByRole("combobox", { name: "Installation preference (Optional)" }),
+    "Required",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(writes).toEqual([
+    {
+      path: "/skill-hub/skills/import",
+      method: "POST",
+      body: JSON.stringify({
+        name: "review-alias",
+        installation_preference: "required",
+        source: { source: "archive", url: "https://artifacts.example.test/review.zip", sha256: "aBcD".repeat(16) },
+      }),
+    },
+  ]);
+});
+
+it.each(["upload", "import"])("sends explicit registry metadata in the %s creation request", async (mode) => {
+  renderWithProviders(<ClaudeCodePluginsPanel accessToken="admin-token" userRole="Admin" />);
+  fireEvent.click(screen.getByRole("button", { name: "+ Register your skill" }));
+  const file = new File(["legacy ZIP content"], "legacy.zip", { type: "application/zip" });
+  if (mode === "upload") {
+    fireEvent.change(screen.getByLabelText("Skill ZIP file"), { target: { files: [file] } });
+  } else {
+    fireEvent.click(screen.getByRole("radio", { name: "Import URL" }));
+    fireEvent.change(screen.getByLabelText("Source URL"), { target: { value: "https://github.com/example/skills" } });
+  }
+  fireEvent.change(screen.getByLabelText("Description (Optional)"), { target: { value: "Explicit description" } });
+  fireEvent.click(screen.getByText("Advanced metadata (optional)"));
+  fireEvent.change(screen.getByLabelText("Author Name (Optional)"), { target: { value: "Maintainer" } });
+  fireEvent.change(screen.getByLabelText("Homepage (Optional)"), { target: { value: "https://example.test/skill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Register skill" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Enter a registry name");
+  expect(writes).toEqual([]);
+  fireEvent.change(screen.getByLabelText("Registry name (optional)"), { target: { value: "registry-alias" } });
+  fireEvent.click(screen.getByRole("button", { name: "Register skill" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(writes).toHaveLength(1);
+  const metadata = {
+    name: "registry-alias",
+    description: "Explicit description",
+    author: { name: "Maintainer" },
+    homepage: "https://example.test/skill",
+  };
+  if (mode === "upload") {
+    expect(writes[0].path).toBe("/skill-hub/skills/upload");
+    const body = writes[0].body as FormData;
+    expect(body.get("file")).toBe(file);
+    expect(JSON.parse(String(body.get("metadata")))).toEqual(metadata);
+    expect(body.get("version")).toBeNull();
+  } else {
+    expect(writes[0].path).toBe("/skill-hub/skills/import");
+    expect(JSON.parse(String(writes[0].body))).toEqual({ url: "https://github.com/example/skills", metadata });
+  }
+});
+
+it("requires an explicit replacement choice before submitting a published source change", async () => {
+  renderWithProviders(<ClaudeCodePluginsPanel accessToken="member-token" userRole="Internal User" />);
+  await openEdit();
+  fireEvent.click(screen.getByRole("radio", { name: "Replace source" }));
+  expect(screen.getByLabelText("Source URL")).toHaveValue("");
+  expect(screen.getByText(/removes the current managed archive and portable descriptor/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Source URL"), { target: { value: "git@git.example.test:team/review.git" } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(writes[0]).toMatchObject({ path: "/skill-hub/skills/shared-skill", method: "PUT" });
+  expect(JSON.parse(String(writes[0].body))).toMatchObject({
+    source: { source: "url", url: "git@git.example.test:team/review.git" },
+    expected_updated_at: published.updated_at,
+    keywords: published.keywords,
+  });
+});
+
 it("retries failed detail loading before enabling edits", async () => {
   const fetchStub = fetchMock.getMockImplementation()!;
   fetchMock.mockImplementation((input, options) =>
@@ -484,6 +576,7 @@ it("edits the loaded detail with automatic version intent and preserves the appr
     description: "Proposed instructions",
   };
   expect(JSON.parse(String(writes[0].body))).toMatchObject(expectedMetadata);
+  expect(JSON.parse(String(writes[0].body))).not.toHaveProperty("source");
   expect(await screen.findByText("Recorded release")).toBeInTheDocument();
   expect(screen.queryByText("Proposed instructions")).not.toBeInTheDocument();
 });
@@ -808,12 +901,35 @@ it("applies tag and scan filters across the catalog and resets pagination when s
 });
 
 it("lets an owner edit the viewed proposal and withdraw it with its current revision", async () => {
-  submissions = [{ ...pending, can_edit: true, revision: 3, proposal: { ...pending.proposal, version: "3.0.0" } }];
+  submissions = [
+    {
+      ...pending,
+      can_edit: true,
+      revision: 3,
+      proposal: {
+        ...pending.proposal,
+        version: "3.0.0",
+        author: { name: "Proposed author", email: "proposed@example.test" },
+        category: "Proposed category",
+        homepage: "https://example.test/proposed",
+        installation_preference: "available",
+      },
+    },
+  ];
   renderWithProviders(<ClaudeCodePluginsPanel accessToken="member-token" userRole="Internal User" />, {
     searchParams: "tab=submissions",
   });
   fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+  expect(await screen.findByText(/Proposed author/)).toBeInTheDocument();
+  expect(screen.getByText("Proposed category")).toBeInTheDocument();
+  expect(screen.getByText("https://example.test/proposed")).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Edit submission" }));
+  expect(screen.queryByRole("radio", { name: "Replace source" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText("Advanced metadata (optional)"));
+  expect(screen.getByLabelText("Author Name (Optional)")).toHaveValue("Proposed author");
+  expect(screen.getByLabelText("Category (Optional)")).toHaveValue("Proposed category");
+  expect(screen.getByLabelText("Homepage (Optional)")).toHaveValue("https://example.test/proposed");
+  expect(screen.getByRole("combobox", { name: "Installation preference (Optional)" })).toHaveTextContent("Available");
   expect(screen.getByLabelText("Version override (optional)")).toHaveValue("3.0.0");
   expect(
     screen.getByText(
@@ -829,6 +945,8 @@ it("lets an owner edit the viewed proposal and withdraw it with its current revi
     expected_revision: 3,
     description: "Owner revised instructions",
   });
+  expect(JSON.parse(String(writes[0].body))).not.toHaveProperty("source");
+  expect(JSON.parse(String(writes[0].body))).not.toHaveProperty("author");
   expect(catalog).toEqual([published]);
   fireEvent.click(screen.getByRole("button", { name: "Withdraw submission" }));
   expect(writes).toHaveLength(1);
@@ -842,6 +960,48 @@ it("lets an owner edit the viewed proposal and withdraw it with its current revi
   expect(screen.queryByRole("button", { name: "Edit submission" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Withdraw submission" })).not.toBeInTheDocument();
 });
+
+it.each([
+  ["portable", null, "required", "Required"],
+  ["portable", "available", "auto_install", "Automatic installation"],
+  ["legacy", "available", "required", "Required"],
+  ["legacy", null, "auto_install", "Automatic installation"],
+] as const)(
+  "changes %s pending archive installation from %s to %s",
+  async (kind, initialPreference, installationPreference, label) => {
+    const user = userEvent.setup();
+    const submission: SkillSubmission = {
+      ...pending,
+      can_edit: true,
+      revision: 3,
+      has_archive: true,
+      proposal: {
+        ...pending.proposal,
+        agent_skill: kind === "portable" ? pending.proposal.agent_skill : null,
+        source: { source: "archive", url: "/skill-hub/skills/shared-skill/archive" },
+        installation_preference: initialPreference,
+      },
+    };
+    submissions = [submission];
+    renderWithProviders(<ClaudeCodePluginsPanel accessToken="member-token" userRole="Internal User" />, {
+      searchParams: "tab=submissions",
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Edit submission" }));
+    fireEvent.click(screen.getByText("Advanced metadata (optional)"));
+    await chooseSelectOption(user, screen.getByRole("combobox", { name: "Installation preference (Optional)" }), label);
+    fireEvent.click(screen.getByRole("button", { name: "Save submission" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0]).toMatchObject({ path: `/skill-hub/submissions/${submission.id}`, method: "PUT" });
+    const metadata = JSON.parse(String(writes[0].body));
+    expect(metadata).toMatchObject({
+      expected_revision: submission.revision,
+      installation_preference: installationPreference,
+    });
+    expect(metadata).not.toHaveProperty("source");
+    expect(catalog).toEqual([published]);
+  },
+);
 
 it("keeps admin review separate from ownership and sends the displayed revision", async () => {
   submissions = [{ ...pending, revision: 7, can_edit: false }];

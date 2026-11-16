@@ -28,7 +28,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const METADATA_FIELDS = ["name", "version", "description", "source", "keywords", "domain", "namespace"] as const;
+const METADATA_FIELDS = [
+  "name",
+  "version",
+  "description",
+  "source",
+  "author",
+  "category",
+  "homepage",
+  "installation_preference",
+  "keywords",
+  "domain",
+  "namespace",
+] as const;
 
 const displayValue = (value: unknown): string => {
   if (value === null || value === undefined || value === "") return "";
@@ -145,7 +157,7 @@ function SubmissionComparison({
           </tbody>
         </table>
       </div>
-      {submission.has_archive && submission.proposal.agent_skill && (
+      {submission.has_archive && (
         <Button variant="outline" onClick={onDownload} disabled={downloading}>
           {t(downloading ? "skills.submissions.downloading" : "skills.submissions.download")}
         </Button>

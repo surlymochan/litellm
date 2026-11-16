@@ -24,21 +24,21 @@ const openImport = () => {
 describe("AddPluginForm", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("starts with a portable ZIP and offers host-agnostic imports without guessing metadata", () => {
+  it("starts with a portable ZIP and offers explicit registration and optional registry metadata", () => {
     renderWithProviders(<AddPluginForm {...props} />);
     expect(screen.getByRole("radio", { name: "Upload ZIP" })).toBeChecked();
     expect(screen.getByText(/frontmatter supplies the skill name and description/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Import URL" }));
     expect(screen.getByLabelText("Source URL")).toBeInTheDocument();
     expect(screen.getByLabelText("Path (optional)")).toBeEnabled();
-    expect(screen.queryByLabelText("Skill Name")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Registry name (optional)")).toHaveValue("");
+    expect(screen.getByRole("radio", { name: "Register source" })).not.toBeChecked();
   });
 
   it.each([
     "https://github.com/anthropics/claude-code",
     "https://github.com/anthropics/claude-code/tree/main/plugins/my-skill",
-    "https://gitlab.com/group/repo",
-    "https://skills-bucket.s3.us-east-1.amazonaws.com/plugins/s3-skill-1.0.0.zip",
+    "https://skills.sh/example/skills/review",
   ])("submits the original source URL %s", async (url) => {
     openImport();
     change("Source URL", url);
@@ -88,7 +88,7 @@ describe("AddPluginForm", () => {
     expect(props.onSuccess).not.toHaveBeenCalled();
     submit();
     await waitFor(() => expect(props.onSuccess).toHaveBeenCalledOnce());
-    expect(uploadSkill).toHaveBeenLastCalledWith("sk-test", file, "2.0.0", undefined);
+    expect(uploadSkill).toHaveBeenLastCalledWith("sk-test", file, "2.0.0", { skill: undefined, metadata: undefined });
     expect(importSkill).not.toHaveBeenCalled();
     expect(props.onClose).toHaveBeenCalledOnce();
   });
@@ -115,7 +115,9 @@ describe("AddPluginForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Please choose a .zip file");
     chooseFile();
     submit();
-    await waitFor(() => expect(uploadSkill).toHaveBeenCalledWith("sk-test", file, "", undefined));
+    await waitFor(() =>
+      expect(uploadSkill).toHaveBeenCalledWith("sk-test", file, "", { skill: undefined, metadata: undefined }),
+    );
   });
 
   it("blocks an invalid version and cancels without publishing", async () => {

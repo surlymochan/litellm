@@ -1790,7 +1790,9 @@
         "keywords": "Tags (Optional)",
         "version": "Version (Optional)",
         "authorName": "Author Name (Optional)",
-        "authorEmail": "Author Email (Optional)"
+        "authorEmail": "Author Email (Optional)",
+        "homepage": "Homepage (Optional)",
+        "installationPreference": "Installation preference (Optional)"
       },
       "hints": {
         "archive": "Choose a ZIP from your computer, up to 10 MiB. Include SKILL.md at the root or inside one skill folder, along with any supporting files. The skill will use the same visibility settings as skills added by URL.",
@@ -1834,7 +1836,11 @@
         "nameRequired": "Please enter skill name",
         "nameInvalid": "Name must be kebab-case (lowercase, numbers, hyphens only)",
         "emailInvalid": "Please enter a valid email",
-        "descriptionTooLong": "Description must be 1024 characters or fewer"
+        "metadataNameRequired": "Enter a registry name to register a source or set custom metadata",
+        "authorNameRequired": "Enter an author name when providing an email",
+        "preferenceInvalid": "Choose an installation preference from the list",
+        "preferenceArchive": "Installation preferences require an archive source",
+        "preferenceDigest": "Automatic or required installation needs the archive SHA-256"
       },
       "toasts": {
         "noToken": "No access token available",
@@ -1858,7 +1864,9 @@
       "modes": {
         "upload": "Upload ZIP",
         "import": "Import URL",
-        "metadata": "Edit metadata"
+        "metadata": "Edit metadata",
+        "register": "Register source",
+        "replace": "Replace source"
       },
       "neutralLabels": {
         "url": "Source URL",
@@ -1869,9 +1877,23 @@
         "namespace": "Namespace (optional)",
         "keywords": "Tags (optional)"
       },
-      "uploadHint": "Choose a ZIP up to 10 MiB containing SKILL.md. Its frontmatter supplies the skill name and description.",
+      "uploadHint": "Choose a ZIP up to 10 MiB containing SKILL.md. Its frontmatter supplies the skill name and description. For a legacy ZIP without frontmatter, enter a registry name below.",
       "replacementHint": "The replacement SKILL.md supplies the description. Domain, namespace, and keywords are preserved.",
-      "importHint": "Enter the original source URL. Use a skill selector or path when the repository contains several skills. Leave the ref blank to use HEAD.",
+      "importHint": "Import a portable skill from GitHub or skills.sh. Use a selector or path for repositories with several skills. Leave the ref blank to use HEAD. For other hosts or private repositories, choose Register source.",
+      "registerHint": "Register a Git repository, subfolder, or HTTPS ZIP for clients to install. LiteLLM stores the reference without downloading its contents.",
+      "replaceHint": "Replace the published source with this reference. This removes the current managed archive and portable descriptor when published. Previous versions remain available.",
+      "registryName": "Registry name",
+      "optionalRegistryName": "Registry name (optional)",
+      "registryNameHint": "Use a unique kebab-case name. An explicit name is required for custom metadata and legacy ZIPs. It does not change the files.",
+      "advancedMetadata": "Advanced metadata (optional)",
+      "preferenceHint": "Applies to archive sources. Automatic and required installation need a SHA-256 digest. LiteLLM computes the digest for uploads and portable imports.",
+      "preferences": {
+        "none": "Not set",
+        "available": "Available",
+        "auto_install": "Automatic installation",
+        "required": "Required",
+        "legacy": "{{value}} (current)"
+      },
       "saving": "Saving..."
     },
     "scanning": {
@@ -2045,6 +2067,7 @@
         "namespace": "Namespace",
         "version": "Version",
         "author": "Author",
+        "authorEmail": "Author email",
         "added": "Added"
       },
       "overview": {

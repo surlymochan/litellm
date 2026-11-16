@@ -26,7 +26,7 @@ type SkillDetailData = Pick<
   "id" | "name" | "source" | "version" | "description" | "domain" | "namespace" | "keywords" | "updated_at"
 > &
   Pick<Plugin, "enabled"> &
-  Partial<Pick<Plugin, "created_at" | "category" | "author">> & {
+  Partial<Pick<Plugin, "created_at" | "category" | "author" | "homepage" | "installation_preference">> & {
     portable?: boolean;
     downloadAvailable?: boolean;
   };
@@ -34,17 +34,9 @@ type SkillDetailData = Pick<
 export const legacySkillDetail = (skill: Plugin): SkillDetailData => skill;
 
 export const skillHubDetail = (skill: SkillHubSkill): SkillDetailData => ({
-  id: skill.id,
-  name: skill.name,
-  source: skill.source,
-  version: skill.version,
-  description: skill.description,
-  domain: skill.domain,
-  namespace: skill.namespace,
-  keywords: skill.keywords,
-  updated_at: skill.updated_at,
+  ...skill,
   enabled: skill.visibility === "public",
-  portable: true,
+  portable: Boolean(skill.content_url),
   downloadAvailable: Boolean(skill.download_url),
 });
 
@@ -179,6 +171,13 @@ const SkillDetail: React.FC<SkillDetailProps> = ({
       : []),
     ...(skill.author?.name
       ? [{ property: t("claudeCodePlugins.skillDetail.properties.author"), value: skill.author.name }]
+      : []),
+    ...(skill.author?.email
+      ? [{ property: t("claudeCodePlugins.skillDetail.properties.authorEmail"), value: skill.author.email }]
+      : []),
+    ...(skill.homepage ? [{ property: t("skills.submissions.fields.homepage"), value: skill.homepage }] : []),
+    ...(skill.installation_preference
+      ? [{ property: t("skills.submissions.fields.installation_preference"), value: skill.installation_preference }]
       : []),
     ...(skill.created_at
       ? [

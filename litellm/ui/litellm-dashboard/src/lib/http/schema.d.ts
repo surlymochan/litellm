@@ -16297,7 +16297,7 @@ export interface paths {
         put?: never;
         /**
          * Import Skill
-         * @description Import a public skills.sh or GitHub skill as a portable snapshot.
+         * @description Register a source reference, or import a public skills.sh/GitHub URL as a portable snapshot.
          */
         post: operations["import_skill_skill_hub_skills_import_post"];
         delete?: never;
@@ -16340,7 +16340,7 @@ export interface paths {
         get: operations["get_skill_skill_hub_skills__name__get"];
         /**
          * Replace Skill Metadata
-         * @description Replace registry metadata, preserving files. Members submit an immutable proposal for admin review.
+         * @description Replace registry metadata or an explicit source. Members submit a proposal for admin review.
          */
         put: operations["replace_skill_metadata_skill_hub_skills__name__put"];
         post?: never;
@@ -16503,7 +16503,7 @@ export interface paths {
         };
         /**
          * Download Skill Version
-         * @description Download a retained publication as a portable ZIP with SKILL.md at its root.
+         * @description Download a retained skill ZIP, preserving legacy packages without portable frontmatter.
          */
         get: operations["download_skill_version_skill_hub_skills__name__versions__version_id__archive_get"];
         put?: never;
@@ -16630,7 +16630,7 @@ export interface paths {
         };
         /**
          * Download Submission
-         * @description Download an owned proposal as a private portable ZIP. Legacy nonportable archives return 404.
+         * @description Download an owned proposal as a private ZIP, preserving legacy packages without portable frontmatter.
          */
         get: operations["download_submission_skill_hub_submissions__submission_id__archive_get"];
         put?: never;
@@ -29346,7 +29346,7 @@ export interface components {
             expected_revision: number;
             /**
              * File
-             * @description Replacement Agent Skills ZIP with the same declared skill name
+             * @description Replacement ZIP retaining the registered and declared skill names
              */
             file: string;
             /** Version */
@@ -29396,7 +29396,7 @@ export interface components {
             expected_updated_at?: string | null;
             /**
              * File
-             * @description Replacement Agent Skills ZIP with the same declared skill name
+             * @description Replacement ZIP retaining the registered and declared skill names
              */
             file: string;
             /** Version */
@@ -29514,6 +29514,11 @@ export interface components {
              * @description Agent Skills ZIP with SKILL.md and optional supporting files
              */
             file: string;
+            /**
+             * Metadata
+             * @description Optional JSON registry metadata
+             */
+            metadata?: string | null;
             /** Version */
             version?: string | null;
         };
@@ -35977,6 +35982,8 @@ export interface components {
         };
         /** ImportSkillRequest */
         ImportSkillRequest: {
+            /** @description Optional registry name and metadata overrides */
+            metadata?: components["schemas"]["UploadPluginRequest"] | null;
             /**
              * Path
              * @description Repository-relative skill directory
@@ -48741,27 +48748,6 @@ export interface components {
              */
             tags: string[];
         };
-        /** SkillHubMetadata */
-        SkillHubMetadata: {
-            /** Description */
-            description?: string | null;
-            /** Domain */
-            domain?: string | null;
-            /**
-             * Expected Updated At
-             * @description Published updated_at read by the editor. A stale value returns 409
-             */
-            expected_updated_at?: string | null;
-            /** Keywords */
-            keywords?: string[] | null;
-            /** Namespace */
-            namespace?: string | null;
-            /**
-             * Version
-             * @description Explicit higher SemVer, or omit/null for an automatic patch bump
-             */
-            version?: string | null;
-        };
         /** SkillHubPendingSkill */
         SkillHubPendingSkill: {
             /**
@@ -48783,10 +48769,17 @@ export interface components {
         /** SkillHubProposal */
         SkillHubProposal: {
             agent_skill?: components["schemas"]["SkillHubAgentSkill"] | null;
+            author?: components["schemas"]["PluginAuthor"] | null;
+            /** Category */
+            category?: string | null;
             /** Description */
             description: string | null;
             /** Domain */
             domain?: string | null;
+            /** Homepage */
+            homepage?: string | null;
+            /** Installation Preference */
+            installation_preference?: ("available" | "auto_install" | "required") | null;
             /** Keywords */
             keywords?: string[] | null;
             /** Name */
@@ -48847,6 +48840,9 @@ export interface components {
         SkillHubSkill: {
             /** Approved By */
             approved_by?: string | null;
+            author?: components["schemas"]["PluginAuthor"] | null;
+            /** Category */
+            category?: string | null;
             /** Content Url */
             content_url?: string | null;
             /** Created At */
@@ -48864,8 +48860,12 @@ export interface components {
             download_count?: number | null;
             /** Download Url */
             download_url?: string | null;
+            /** Homepage */
+            homepage?: string | null;
             /** Id */
             id: string;
+            /** Installation Preference */
+            installation_preference?: ("available" | "auto_install" | "required") | null;
             /** Keywords */
             keywords?: string[] | null;
             /** Name */
@@ -48949,6 +48949,13 @@ export interface components {
         };
         /** SkillHubSubmissionEdit */
         SkillHubSubmissionEdit: {
+            /** @description Omit to preserve, null to clear */
+            author?: components["schemas"]["PluginAuthor"] | null;
+            /**
+             * Category
+             * @description Omit to preserve, null to clear
+             */
+            category?: string | null;
             /** Description */
             description?: string | null;
             /** Domain */
@@ -48963,6 +48970,16 @@ export interface components {
              * @description Published updated_at read by the editor. A stale value returns 409
              */
             expected_updated_at?: string | null;
+            /**
+             * Homepage
+             * @description Omit to preserve, null to clear
+             */
+            homepage?: string | null;
+            /**
+             * Installation Preference
+             * @description Omit to preserve, null to clear. Automatic installation requires a pinned archive
+             */
+            installation_preference?: ("available" | "auto_install" | "required") | null;
             /** Keywords */
             keywords?: string[] | null;
             /** Namespace */
@@ -48989,6 +49006,51 @@ export interface components {
              * @description Revision read from the submission detail
              */
             expected_revision: number;
+        };
+        /** SkillHubUpdate */
+        SkillHubUpdate: {
+            /** @description Omit to preserve, null to clear */
+            author?: components["schemas"]["PluginAuthor"] | null;
+            /**
+             * Category
+             * @description Omit to preserve, null to clear
+             */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Domain */
+            domain?: string | null;
+            /**
+             * Expected Updated At
+             * @description Published updated_at read by the editor. A stale value returns 409
+             */
+            expected_updated_at?: string | null;
+            /**
+             * Homepage
+             * @description Omit to preserve, null to clear
+             */
+            homepage?: string | null;
+            /**
+             * Installation Preference
+             * @description Omit to preserve, null to clear. Automatic installation requires a pinned archive
+             */
+            installation_preference?: ("available" | "auto_install" | "required") | null;
+            /** Keywords */
+            keywords?: string[] | null;
+            /** Namespace */
+            namespace?: string | null;
+            /**
+             * Source
+             * @description Explicit replacement source reference. Omit/null to preserve the stored source and archive
+             */
+            source?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Version
+             * @description Explicit higher SemVer, or omit/null for an automatic patch bump
+             */
+            version?: string | null;
         };
         /** SkillHubVersion */
         SkillHubVersion: {
@@ -77928,6 +77990,7 @@ export interface operations {
                 security_scan_passed?: boolean | null;
                 sort_by?: "name" | "download_count" | "updated_at" | "created_at" | "created_by" | "published_by" | "approved_by" | "security_scan_passed";
                 sort_order?: "asc" | "desc";
+                enabled_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -77964,7 +78027,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportSkillRequest"];
+                "application/json": components["schemas"]["RegisterPluginRequest"] | components["schemas"]["ImportSkillRequest"];
             };
         };
         responses: {
@@ -78063,7 +78126,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SkillHubMetadata"];
+                "application/json": components["schemas"]["SkillHubUpdate"];
             };
         };
         responses: {

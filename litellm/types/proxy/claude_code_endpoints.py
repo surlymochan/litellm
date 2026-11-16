@@ -14,6 +14,19 @@ _BOTH_PREFERENCE_SPELLINGS: Final = frozenset({"installation_preference", "insta
 _REQUEST_KEYS: Final = TypeAdapter(dict[str, object])
 
 
+def normalize_installation_preference_aliases(data: object) -> object:
+    if not isinstance(data, dict):
+        return data
+    fields: Final = _REQUEST_KEYS.validate_python(data)
+    if not _BOTH_PREFERENCE_SPELLINGS.issubset(fields):
+        return fields
+    if all(fields[key] is not None for key in _BOTH_PREFERENCE_SPELLINGS):
+        raise ValueError("send installation_preference or installationPreference, not both")
+    if all(fields[key] is None for key in _BOTH_PREFERENCE_SPELLINGS):
+        return {key: value for key, value in fields.items() if key != "installationPreference"}
+    return {key: value for key, value in fields.items() if key not in _BOTH_PREFERENCE_SPELLINGS or value is not None}
+
+
 class PluginAuthor(LiteLLMBaseModel):
     """Plugin author information."""
 
@@ -55,16 +68,7 @@ class PluginMetadata(LiteLLMBaseModel):
     @model_validator(mode="before")
     @classmethod
     def reject_both_preference_spellings(cls, data: object) -> object:
-        if not isinstance(data, dict):
-            return data
-        fields: Final = _REQUEST_KEYS.validate_python(data)
-        if not _BOTH_PREFERENCE_SPELLINGS.issubset(fields):
-            return fields
-        if all(fields[key] is not None for key in _BOTH_PREFERENCE_SPELLINGS):
-            raise ValueError("send installation_preference or installationPreference, not both")
-        return {
-            key: value for key, value in fields.items() if key not in _BOTH_PREFERENCE_SPELLINGS or value is not None
-        }
+        return normalize_installation_preference_aliases(data)
 
 
 class PluginSpec(PluginMetadata):

@@ -28,9 +28,15 @@ export type SkillRegisterRequest = Omit<components["schemas"]["RegisterPluginReq
 export type SkillListQuery = NonNullable<operations["list_skills_skill_hub_skills_get"]["parameters"]["query"]>;
 
 export type SkillHubSkill = components["schemas"]["SkillHubSkill"];
-export type SkillMetadata = components["schemas"]["SkillHubMetadata"];
-export type SkillImport = Omit<components["schemas"]["ImportSkillRequest"], "ref"> &
-  Partial<Pick<components["schemas"]["ImportSkillRequest"], "ref">>;
+export type SkillMetadata = Omit<components["schemas"]["SkillHubSubmissionEdit"], "expected_revision">;
+export type SkillUpdate = components["schemas"]["SkillHubUpdate"];
+export type SkillUploadMetadata = Omit<components["schemas"]["UploadPluginRequest"], "version"> & {
+  version?: components["schemas"]["UploadPluginRequest"]["version"];
+};
+export type SkillImport = Omit<components["schemas"]["ImportSkillRequest"], "ref" | "metadata"> &
+  Partial<Pick<components["schemas"]["ImportSkillRequest"], "ref">> & {
+    metadata?: SkillUploadMetadata | null;
+  };
 export type SkillMutationResponse = SkillHubSkill | components["schemas"]["SkillHubPendingSkill"];
 export type SkillSubmission = components["schemas"]["SkillHubSubmission"];
 

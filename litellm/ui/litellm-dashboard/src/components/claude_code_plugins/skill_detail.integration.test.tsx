@@ -5,7 +5,7 @@ import { chooseSelectOption, renderWithProviders, testQueryClient } from "@/../t
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getProxyBaseUrl, setGlobalLitellmHeaderName } from "@/components/networking";
 import SkillDetail, { skillHubDetail } from "./skill_detail";
-import type { Plugin, PluginDownloadEvent, PluginDownloadsResponse } from "./types";
+import type { Plugin, PluginDownloadEvent, PluginDownloadsResponse, SkillHubSkill } from "./types";
 
 const digest = "a".repeat(64);
 const archivePath = `/claude-code/plugins/my-skill/archive/${digest}.zip`;
@@ -75,11 +75,20 @@ it.each(["legacy", "portable"])(
     URL.createObjectURL = vi.fn(() => "blob:skill-download");
     setGlobalLitellmHeaderName("X-LiteLLM-Key");
     const expectedUrl = kind === "portable" ? `${getProxyBaseUrl()}/skill-hub/skills/my-skill/archive` : url;
-    const detail =
-      kind === "portable"
-        ? skillHubDetail({ ...skill, visibility: "private", download_url: "/skill-hub/skills/my-skill/archive" })
-        : skill;
-    renderWithProviders(<SkillDetail skill={detail} onBack={vi.fn()} accessToken="dashboard-token" />);
+    const hubSkill: SkillHubSkill = {
+      ...skill,
+      security_scan_passed: false,
+      visibility: "private",
+      download_url: kind === "portable" ? "/skill-hub/skills/my-skill/archive" : url,
+      content_url: kind === "portable" ? "/skill-hub/skills/my-skill/content" : null,
+    };
+    renderWithProviders(
+      <SkillDetail skill={skillHubDetail(hubSkill)} onBack={vi.fn()} accessToken="dashboard-token" />,
+    );
+    if (kind === "legacy") {
+      expect(screen.getByRole("tab", { name: "How to Use" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Install / Share" })).not.toBeInTheDocument();
+    }
     skillRequestMock.mockResolvedValueOnce(Response.json({ detail: "Archive not found" }, { status: 404 }));
     fireEvent.click(screen.getByRole("button", { name: "Download ZIP" }));
     expect(screen.getByRole("button", { name: "Downloading…" })).toBeDisabled();
@@ -198,13 +207,14 @@ it("copies the selected private install without sharing a session key and report
   const writeText = vi.spyOn(navigator.clipboard, "writeText").mockReturnValueOnce(pendingCopy.promise);
   setGlobalLitellmHeaderName("X-LiteLLM-Key");
   skillRequestMock.mockResolvedValue(Response.json({ detail: "Not Found" }, { status: 404 }));
-  renderWithProviders(
-    <SkillDetail
-      skill={skillHubDetail({ ...skill, visibility: "private", download_url: "/skill-hub/skills/my-skill/archive" })}
-      onBack={vi.fn()}
-      accessToken="dashboard-token"
-    />,
-  );
+  const hubSkill: SkillHubSkill = {
+    ...skill,
+    security_scan_passed: false,
+    visibility: "private",
+    download_url: "/skill-hub/skills/my-skill/archive",
+    content_url: "/skill-hub/skills/my-skill/content",
+  };
+  renderWithProviders(<SkillDetail skill={skillHubDetail(hubSkill)} onBack={vi.fn()} accessToken="dashboard-token" />);
   expect(skillRequestMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Install / Share" }));
   await chooseSelectOption(user, screen.getByRole("combobox", { name: "Coding agent" }), "Claude Code");
@@ -239,13 +249,14 @@ it("offers the indexed public skill name and discards its availability when reop
       skills: [{ name: "my-skill-2", type: "archive", url: `${getProxyBaseUrl()}${portablePath}?digest=sha256:abc` }],
     }),
   );
-  renderWithProviders(
-    <SkillDetail
-      skill={skillHubDetail({ ...skill, visibility: "public", download_url: portablePath })}
-      onBack={vi.fn()}
-      accessToken="dashboard-token"
-    />,
-  );
+  const hubSkill: SkillHubSkill = {
+    ...skill,
+    security_scan_passed: false,
+    visibility: "public",
+    download_url: portablePath,
+    content_url: "/skill-hub/skills/my-skill/content",
+  };
+  renderWithProviders(<SkillDetail skill={skillHubDetail(hubSkill)} onBack={vi.fn()} accessToken="dashboard-token" />);
   fireEvent.click(screen.getByRole("button", { name: "Install / Share" }));
   fireEvent.click(await screen.findByRole("radio", { name: "Public command" }));
   focusManager.setFocused(false);
@@ -261,4 +272,29 @@ it("offers the indexed public skill name and discards its availability when reop
   expect(screen.queryByRole("radio", { name: "Public command" })).not.toBeInTheDocument();
   refreshedIndex.resolve(Response.json({ skills: [] }));
   expect(screen.getByLabelText("Install command")).toHaveTextContent("LiteLLM API key");
+});
+
+it("retains Hub reference metadata and marketplace installation guidance without portable actions", () => {
+  const hubSkill: SkillHubSkill = {
+    ...skill,
+    security_scan_passed: false,
+    visibility: "public",
+    source: { source: "archive", url: "https://artifacts.example.test/skill.zip", sha256: digest },
+    content_url: null,
+    download_url: null,
+    author: { name: "Maintainer", email: "maintainer@example.test" },
+    category: "Review",
+    homepage: "https://example.test/skill",
+    installation_preference: "required",
+  };
+  renderWithProviders(<SkillDetail skill={skillHubDetail(hubSkill)} onBack={vi.fn()} />);
+  expect(screen.getByRole("cell", { name: "Maintainer" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "maintainer@example.test" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Review" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "https://example.test/skill" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "required" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Install / Share" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Download ZIP" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "How to Use" }));
+  expect(screen.getByText("/plugin install my-skill@litellm")).toBeInTheDocument();
 });

@@ -39,9 +39,11 @@ from litellm.proxy.proxy_server import LitellmUserRoles, hash_token
 from litellm.repositories.plugin_upload_repository import PluginUploadRepository
 from litellm.types.proxy.claude_code_endpoints import (
     MarketplaceResponse,
+    PluginMetadata,
     RegisterPluginRequest,
     UpdatePluginRequest,
 )
+from litellm.types.proxy.skill_hub import SkillHubMetadata
 from tests._master_key import MASTER_KEY
 
 
@@ -628,6 +630,22 @@ def test_plugin_request_reads_the_spelling_that_carries_a_value(build_request, n
     request = build_request({"source": _ARCHIVE_SOURCE, null_key: None, value_key: "auto_install"})
 
     assert request.installation_preference == "auto_install"
+
+
+@pytest.mark.parametrize("request_model", (PluginMetadata, SkillHubMetadata))
+@pytest.mark.parametrize(
+    "spellings",
+    ((), ("installation_preference",), ("installationPreference",), ("installation_preference", "installationPreference")),
+    ids=("omitted", "snake-null", "camel-null", "both-null"),
+)
+def test_null_preference_aliases_preserve_explicit_clear(
+    request_model: type[PluginMetadata] | type[SkillHubMetadata], spellings: tuple[str, ...],
+) -> None:
+    request: Final = request_model.model_validate({"description": "Retained", **dict.fromkeys(spellings)})
+    expected: Final = {"description": "Retained", **({"installation_preference": None} if spellings else {})}
+
+    assert request.model_fields_set == frozenset(expected)
+    assert request.model_dump(exclude_unset=True) == expected
 
 
 @pytest.mark.asyncio
